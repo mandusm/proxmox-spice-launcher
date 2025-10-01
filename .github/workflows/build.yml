@@ -1,0 +1,148 @@
+name: Build Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build for ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - goos: linux
+            goarch: amd64
+            os: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            os: ubuntu-latest
+          
+          # macOS builds
+          - goos: darwin
+            goarch: amd64
+            os: macos-latest
+          - goos: darwin
+            goarch: arm64
+            os: macos-latest
+          
+          # Windows builds
+          - goos: windows
+            goarch: amd64
+            os: windows-latest
+          - goos: windows
+            goarch: arm64
+            os: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Get dependencies
+      run: go mod download
+
+    - name: Set binary name
+      id: binary
+      shell: bash
+      run: |
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          echo "name=proxmox-spice-launch.exe" >> $GITHUB_OUTPUT
+        else
+          echo "name=proxmox-spice-launch" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        go build -ldflags="-s -w" -o ${{ steps.binary.outputs.name }}
+
+    - name: Create archive name
+      id: archive
+      shell: bash
+      run: |
+        echo "name=proxmox-spice-launch-${{ matrix.goos }}-${{ matrix.goarch }}" >> $GITHUB_OUTPUT
+
+    - name: Create tar.gz archive (Linux/macOS)
+      if: matrix.goos != 'windows'
+      run: |
+        tar -czf ${{ steps.archive.outputs.name }}.tar.gz ${{ steps.binary.outputs.name }} README.md
+
+    - name: Create zip archive (Windows)
+      if: matrix.goos == 'windows'
+      shell: pwsh
+      run: |
+        Compress-Archive -Path ${{ steps.binary.outputs.name }}, README.md -DestinationPath ${{ steps.archive.outputs.name }}.zip
+
+    - name: Upload Linux/macOS artifacts
+      if: matrix.goos != 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.archive.outputs.name }}
+        path: ${{ steps.archive.outputs.name }}.tar.gz
+
+    - name: Upload Windows artifacts
+      if: matrix.goos == 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.archive.outputs.name }}
+        path: ${{ steps.archive.outputs.name }}.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -la artifacts/
+
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        body: |
+          ## Changes
+          
+          See the [commit history](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details.
+          
+          ## Downloads
+          
+          Choose the appropriate binary for your platform:
+          
+          - **Linux x86_64**: `proxmox-spice-launch-linux-amd64.tar.gz`
+          - **Linux ARM64**: `proxmox-spice-launch-linux-arm64.tar.gz`
+          - **macOS Intel**: `proxmox-spice-launch-darwin-amd64.tar.gz`
+          - **macOS Apple Silicon**: `proxmox-spice-launch-darwin-arm64.tar.gz`
+          - **Windows x86_64**: `proxmox-spice-launch-windows-amd64.zip`
+          - **Windows ARM64**: `proxmox-spice-launch-windows-arm64.zip`
+        files: |
+          artifacts/proxmox-spice-launch-linux-amd64/proxmox-spice-launch-linux-amd64.tar.gz
+          artifacts/proxmox-spice-launch-linux-arm64/proxmox-spice-launch-linux-arm64.tar.gz
+          artifacts/proxmox-spice-launch-darwin-amd64/proxmox-spice-launch-darwin-amd64.tar.gz
+          artifacts/proxmox-spice-launch-darwin-arm64/proxmox-spice-launch-darwin-arm64.tar.gz
+          artifacts/proxmox-spice-launch-windows-amd64/proxmox-spice-launch-windows-amd64.zip
+          artifacts/proxmox-spice-launch-windows-arm64/proxmox-spice-launch-windows-arm64.zip

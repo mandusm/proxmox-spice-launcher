@@ -1,5 +1,7 @@
 # Proxmox SPICE Launch
 
+[![Build Release Binaries](https://github.com/mandusm/proxmox-spice-launcher/actions/workflows/build.yml/badge.svg)](https://github.com/mandusm/proxmox-spice-launcher/actions/workflows/build.yml)
+
 A simple Go application that connects to the Proxmox SPICE API, retrieves connection details, and launches a SPICE client to connect to a virtual machine.
 
 ## Features
@@ -89,10 +91,20 @@ proxmox:
 
 ## Building
 
+### From Source
 ```bash
 go mod tidy
 go build -o proxmox-spice-launch.exe
 ```
+
+### Pre-built Binaries
+Pre-built binaries are available for download from the [GitHub Releases](https://github.com/mandusm/proxmox-spice-launcher/releases) page for the following platforms:
+
+- **Linux**: x86_64 and ARM64
+- **macOS**: Intel (x86_64) and Apple Silicon (ARM64)  
+- **Windows**: x86_64 and ARM64
+
+Download the appropriate binary for your platform, extract it, and run it directly.
 
 ## Usage
 
